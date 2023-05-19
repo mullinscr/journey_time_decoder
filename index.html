@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<head>
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: 18pt;
+            color: black;
+            margin: auto;
+            margin-top: 24px;
+            max-width: 600px;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #46B2E0;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.25), 0 8px 24px 0 rgba(0, 0, 0, 0.25);
+        }
+        #input_box {
+            font-family: sans-serif;
+            box-sizing: content-box;
+            font-size: 18pt;
+            color: black;
+            width: 500px;
+            padding: 16px 8px;
+            border-radius: 4px;
+        }
+        #decoded_result {
+            font-family: sans-serif;
+            font-size: 16pt;
+            color: black;
+            margin-top: 16px;
+            resize: vertical;
+            width: 500px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <input id="input_box" type="search" placeholder="Enter summary code..."></input>
+        <textarea id="decoded_result" rows="10" readonly="true" tabindex="-1"></textarea>
+    </div>
+    <script>
+        const input_box = document.getElementById("input_box")
+        const result_area = document.getElementById("decoded_result")
+       
+        function b32_to_int(b32_str) {
+            const b32h = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9' , 'a', 'b', 'c',
+                'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',
+                'r', 's', 't', 'u', 'v'];
+
+            const l = b32_str.length;
+            var result_int = 0;
+
+            b32_str.split('').forEach(function (item, index) {
+                var x = (l - 1 - index);
+                if (x != 0) {
+                    result_int += (b32h.indexOf(item) * ((l - 1 - index) * 32));
+                } else {
+                    result_int += b32h.indexOf(item);
+                };
+            });
+
+            return result_int;
+        };
+
+        function decodeSummaryCode(summary_code) {
+            // dates
+            const year = b32_to_int(summary_code[0]);
+            const start_month = b32_to_int(summary_code[1]);
+            const start_date = b32_to_int(summary_code[2]);
+            const end_month = b32_to_int(summary_code[3]);
+            const end_date = b32_to_int(summary_code[4]);
+
+            const year_str = "20" + year + "-" + start_month + "-" + start_date + " to 20" + year + "-" + end_month + "-" + end_date;
+
+            // exclusions
+            const exclusion_mapping = {'3': 'Bank holidays and school holidays excluded.', '2': 'Bank holidays excluded.', '1': 'School holidays excluded.'};
+            const exclusion_str = exclusion_mapping[summary_code[5]];
+
+            const l = summary_code.length;
+            if (l >= 12) {
+                // extra dates
+                var extra_dates_str = "";
+                var n = 9;
+            } else {
+                var extra_dates_str = null;
+                var n = 6;
+            };
+
+            // dotw
+            var dotw = [];
+            const dotw_mapping = [[64, 'Mo'], [32, 'Tu'], [16, 'We'], [8, 'Th'], [4, 'Fr'], [2, 'Sa'], [1, 'Su']];
+            const dotw_int = b32_to_int(summary_code.slice(n, n + 2));
+
+            for (var i=0; i < dotw_mapping.length; i++) {
+                var bit_map = dotw_mapping[i][0];
+                var day = dotw_mapping[i][1];
+                if (bit_map & dotw_int) {
+                  dotw.push(day);
+                }
+            }
+            dotw_str = dotw.join(", ");
+
+            n += 2;
+
+            // vehicle_classes
+            var veh = [];
+            const veh_mapping = [[8, 'Car'], [4, 'Lgv'], [2, 'Hgv'], [1, 'Other']];
+            const veh_int = b32_to_int(summary_code[n]);
+
+            for (var i=0; i < veh_mapping.length; i++) {
+                var bit_map = veh_mapping[i][0];
+                var vc = veh_mapping[i][1];
+                if (bit_map & veh_int) {
+                    veh.push(vc);
+                }
+            }
+            veh_str = veh.join(", ");
+
+            // units
+            const time_mapping = {'0': 'seconds', '1': 'minutes'};
+            const length_mapping = {'0': 'metres', '1': 'kilometres', '2': 'yards', '3': 'miles'};
+            const speed_mapping = {'1': 'mph', '2': 'kph'};
+            const unit_int_pad = b32_to_int(summary_code.slice(n + 1)).toString().padStart(3, '0');
+            var unit_str = "time=" + time_mapping[unit_int_pad[0]] + "; length=" + length_mapping[unit_int_pad[1]];
+
+            if (unit_int_pad[2] != 0) {
+                unit_str += "; speed=" + speed_mapping[unit_int_pad[2]];
+            }
+           
+            var str_list = [year_str, exclusion_str, extra_dates_str, dotw_str, veh_str, unit_str];
+            var decoded_output = "";
+            for (i=0; i < str_list.length; i++) {
+                var str = str_list[i];
+                if (str) {
+                    decoded_output += "\n";
+                    decoded_output += str;
+                }
+            }
+            return decoded_output.trim();
+
+        }
+
+        function showDecoded(e) {
+            result_area.value = ""
+            if (input_box.value) {
+                if (10 == input_box.value.length || input_box.value.length == 11) {
+                    result_area.value = decodeSummaryCode(input_box.value.toLowerCase());
+                }
+            }
+        };
+
+        input_box.addEventListener("input", showDecoded);
+    </script>
+</body>
+</html>
